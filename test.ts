@@ -4,7 +4,7 @@
 // 2MVC
 // 3AOP
 
-// start:dev bu nestar-api ni ishga tushuradi
+// start:dev bu aurelis-api ni ishga tushuradi
 // start:dev:batch monoreponi ishga tusguradi
 //APP MODULE - ingredient bu 
 
