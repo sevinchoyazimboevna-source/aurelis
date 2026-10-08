@@ -1,6 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import * as request from 'supertest';
+import request from 'supertest';
 import { BatchModule } from '../src/batch.module';
 
 describe('AurelisBatchController (e2e)', () => {
@@ -16,6 +16,13 @@ describe('AurelisBatchController (e2e)', () => {
 	});
 
 	it('/ (GET)', () => {
-		return request(app.getHttpServer()).get('/').expect(200).expect({ service: 'aurelis-batch', status: 'idle', scheduledJobs: 0 });
+		return request(app.getHttpServer())
+			.get('/')
+			.expect(200)
+			.expect({ service: 'aurelis-batch', status: 'idle', scheduledJobs: 0 });
+	});
+
+	afterEach(async () => {
+		await app.close();
 	});
 });

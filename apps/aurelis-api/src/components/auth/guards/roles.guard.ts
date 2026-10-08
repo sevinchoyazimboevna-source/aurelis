@@ -1,43 +1,21 @@
-import { BadRequestException, CanActivate, ExecutionContext, Injectable, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { AuthService } from '../auth.service';
-import { Message } from 'apps/aurelis-api/src/libs/enums/common.enum';
+import { GqlExecutionContext } from '@nestjs/graphql';
+import { MemberRole } from '../../../libs/enums/member.enum';
+import { AuthRequest } from '../auth.service';
+import { AuthErrorCode, authError } from '../auth-errors';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
-	constructor(
-		private reflector: Reflector,
-		private authService: AuthService,
-	) {}
+	constructor(private readonly reflector: Reflector) {}
 
-	async canActivate(context: ExecutionContext | any): Promise<boolean> {
-		const roles = this.reflector.get<string[]>('roles', context.getHandler());
-		if (!roles) return true;
-
-		console.info(`--- @guard() Authentication [RolesGuard]: ${roles} ---`);
-
-		if (context.contextType === 'graphql') {
-			const request = context.getArgByIndex(2).req;
-			const bearerToken = request.headers.authorization;
-			if (!bearerToken) throw new BadRequestException(Message.TOKEN_NOT_EXIST);
-
-			const token = bearerToken.split(' ')[1];
-			if (!token) throw new UnauthorizedException(Message.NOT_AUTHENTICATED);
-			let authMember;
-			try {
-				authMember = await this.authService.verifyToken(token);
-			} catch {
-				throw new UnauthorizedException(Message.NOT_AUTHENTICATED);
-			}
-			if (!authMember || authMember.memberStatus !== 'ACTIVE') throw new UnauthorizedException(Message.NOT_AUTHENTICATED);
-			if (!roles.includes(authMember.memberType)) throw new ForbiddenException(Message.ONLY_SPECIFIC_ROLES_ALLOWED);
-
-			console.log('memberNick[roles] =>', authMember.memberNick);
-			request.body.authMember = authMember;
-			return true;
-		}
+	canActivate(context: ExecutionContext): boolean {
+		const roles = this.reflector.getAllAndOverride<MemberRole[]>('roles', [context.getHandler(), context.getClass()]);
+		if (!roles?.length) return true;
+		const request = GqlExecutionContext.create(context).getContext()?.req as AuthRequest | undefined;
+		const member = request?.authMember;
+		if (!member) throw authError(AuthErrorCode.UNAUTHENTICATED);
+		if (!roles.includes(member.role)) throw authError(AuthErrorCode.FORBIDDEN);
 		return true;
-
-		// description => http, rpc, gprs and etc are ignored
 	}
 }

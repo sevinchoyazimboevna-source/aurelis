@@ -6,6 +6,9 @@ export class BrokerProfile {
 	@Field(() => ID)
 	_id: ObjectId;
 
+	@Field(() => ID, { nullable: true })
+	officeId?: ObjectId;
+
 	@Field()
 	name: string;
 

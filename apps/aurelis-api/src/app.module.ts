@@ -7,24 +7,20 @@ import { ApolloDriver } from '@nestjs/apollo';
 import { AppResolver } from './app.resolver';
 import { ComponentsModule } from './components/components.module';
 import { DatabaseModule } from './database/database.module';
-import { T } from './libs/types/common';
+import { formatGraphQLError } from './components/auth/auth-errors';
+import { RealtimeModule } from './realtime/realtime.module';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),
+    RedisModule,
+		RealtimeModule,
     GraphQLModule.forRoot({
       driver: ApolloDriver,
       playground: process.env.NODE_ENV !== 'production',
       autoSchemaFile: true,
-      formatError: (error: T) => {
-        return {
-          code: error?.extensions?.code,
-          message:
-          error?.extensions?.exception?.response?.message ||
-          error?.extensions?.response?.message ||
-          error?.message,
-        };
-      },
+      formatError: formatGraphQLError,
     }),
     ComponentsModule,
     DatabaseModule,

@@ -2,7 +2,7 @@ import { Args, ID, Query, Resolver, Mutation } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { BrokerProfile, BrokerProfiles } from '../../libs/dto/broker/broker';
 import { BrokerProfileInput } from '../../libs/dto/broker/broker.input';
-import { MemberType } from '../../libs/enums/member.enum';
+import { MemberRole } from '../../libs/enums/member.enum';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -23,7 +23,7 @@ export class BrokerResolver {
 		return this.brokerService.getById(id);
 	}
 
-	@Roles(MemberType.ADMIN)
+	@Roles(MemberRole.ADMIN)
 	@UseGuards(AuthGuard, RolesGuard)
 	@Mutation(() => BrokerProfile)
 	async saveBrokerProfile(@Args('input') input: BrokerProfileInput): Promise<BrokerProfile> {

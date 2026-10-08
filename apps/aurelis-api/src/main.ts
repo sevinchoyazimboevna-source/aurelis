@@ -5,7 +5,8 @@ import { LoggingInterceptor } from './libs/interceptor/Logging.interceptor';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule); 
-  app.useGlobalPipes(new ValidationPipe());
+  app.enableShutdownHooks();
+  app.useGlobalPipes(new ValidationPipe({ validationError: { target: false, value: false } }));
   app.useGlobalInterceptors(new LoggingInterceptor());
   app.enableCors({ origin: true, credentials: true });
   await app.listen(process.env.AURELIS_API_PORT ?? process.env.PORT_API ?? 3000);

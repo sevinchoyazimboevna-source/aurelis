@@ -1,8 +1,18 @@
 import { Field, ID, InputType } from '@nestjs/graphql';
-import { IsArray, IsBoolean, IsEmail, IsMongoId, IsOptional, IsString, MinLength } from 'class-validator';
+import { IsArray, IsBoolean, IsEmail, IsMongoId, IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
 
 @InputType()
 export class BrokerProfileInput {
+	@Field(() => ID, { nullable: true })
+	@ValidateIf((_object, value) => value !== undefined)
+	@IsMongoId()
+	memberId?: string;
+
+	@Field(() => ID, { nullable: true })
+	@ValidateIf((_object, value) => value !== undefined)
+	@IsMongoId()
+	officeId?: string;
+
 	@Field(() => ID, { nullable: true })
 	@IsOptional()
 	@IsMongoId()

@@ -1,3 +1,10 @@
-# Aurelis Backend Workflows
+# Aurelis Backend Skills
 
-No Aurelis-specific Codex skills are currently installed. Follow `AGENTS.md` for repository conventions and use the standard NestJS, GraphQL, and Mongoose patterns already present in this codebase.
+Use these Codex skills for repeatable Aurelis backend workflows.
+
+| Skill | Purpose |
+|---|---|
+| `backend-migration` | Continue the Nestar to Aurelis backend modification while preserving the current NestJS architecture. |
+| `product-logic` | Review product GraphQL, DTO, schema, enum, filter, and naming consistency. |
+
+Each skill lives at `skills/<skill-name>/SKILL.md`.

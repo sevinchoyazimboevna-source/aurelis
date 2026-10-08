@@ -1,35 +1,17 @@
-import { BadRequestException, CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
-import { AuthService } from '../auth.service';
-import { Message } from 'apps/aurelis-api/src/libs/enums/common.enum';
+import { CanActivate, ExecutionContext, Injectable } from '@nestjs/common';
+import { GqlExecutionContext } from '@nestjs/graphql';
+import { AuthRequest, AuthService } from '../auth.service';
+import { AuthErrorCode, authError } from '../auth-errors';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
-	constructor(private authService: AuthService) {}
+	constructor(private readonly authService: AuthService) {}
 
-	async canActivate(context: ExecutionContext | any): Promise<boolean> {
-		console.info('--- @guard() Authentication [AuthGuard] ---');
-
-		if (context.contextType === 'graphql') {
-			const request = context.getArgByIndex(2).req;
-
-			const bearerToken = request.headers.authorization;
-			if (!bearerToken) throw new BadRequestException(Message.TOKEN_NOT_EXIST);
-			const token = bearerToken.split(' ')[1];
-			if (!token) throw new UnauthorizedException(Message.NOT_AUTHENTICATED);
-			let authMember;
-			try {
-				authMember = await this.authService.verifyToken(token);
-			} catch {
-				throw new UnauthorizedException(Message.NOT_AUTHENTICATED);
-			}
-			if (!authMember) throw new UnauthorizedException(Message.NOT_AUTHENTICATED);
-
-			request.body.authMember = authMember;
-
-			return true;
-		}
+	async canActivate(context: ExecutionContext): Promise<boolean> {
+		if (context.getType<string>() !== 'graphql') return true;
+		const request = GqlExecutionContext.create(context).getContext()?.req as AuthRequest | undefined;
+		if (!request) throw authError(AuthErrorCode.UNAUTHENTICATED);
+		await this.authService.authenticateRequest(request);
 		return true;
-
-		// description => http, rpc, gprs and etc are ignored
 	}
 }

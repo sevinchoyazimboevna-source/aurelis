@@ -11,17 +11,17 @@ export class Yacht {
 	@Field()
 	name: string;
 
-	@Field()
-	builder: string;
+	@Field({ nullable: true })
+	builder?: string;
 
 	@Field({ nullable: true })
 	model?: string;
 
-	@Field(() => Int)
-	yearBuilt: number;
+	@Field(() => Int, { nullable: true })
+	yearBuilt?: number;
 
-	@Field(() => Float)
-	lengthM: number;
+	@Field(() => Float, { nullable: true })
+	lengthM?: number;
 
 	@Field(() => Float, { nullable: true })
 	beamM?: number;
@@ -44,6 +44,9 @@ export class Yacht {
 	@Field()
 	country: string;
 
+	@Field(() => [ID])
+	destinationIds?: ObjectId[];
+
 	@Field({ nullable: true })
 	description?: string;
 
@@ -60,6 +63,9 @@ export class Yacht {
 	saleCurrency?: string;
 
 	@Field(() => Float, { nullable: true })
+	charterPrice?: number;
+
+	@Field(() => Float, { nullable: true, deprecationReason: 'Use charterPrice' })
 	charterRate?: number;
 
 	@Field({ nullable: true })
@@ -68,12 +74,19 @@ export class Yacht {
 	@Field({ nullable: true })
 	charterRatePeriod?: string;
 
+	@Field(() => Int)
+	viewsCount?: number;
+
+	@Field(() => Int)
+	likesCount?: number;
+
 	@Field()
 	featured: boolean;
 
 	@Field(() => YachtStatus)
 	status: YachtStatus;
 
+	@Field(() => ID)
 	brokerId: ObjectId;
 
 	@Field(() => BrokerProfile, { nullable: true })
@@ -93,4 +106,13 @@ export class Yachts {
 
 	@Field()
 	total: number;
+
+	@Field(() => Int, { nullable: true })
+	page?: number;
+
+	@Field(() => Int, { nullable: true })
+	limit?: number;
+
+	@Field(() => Int, { nullable: true })
+	totalPages?: number;
 }

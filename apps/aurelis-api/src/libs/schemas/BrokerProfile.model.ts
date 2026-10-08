@@ -10,6 +10,8 @@ const BrokerProfileSchema = new Schema(
 		biography: { type: String },
 		languages: { type: [String], default: [] },
 		isActive: { type: Boolean, default: true },
+		memberId: { type: Schema.Types.ObjectId, ref: 'Member' },
+		officeId: { type: Schema.Types.ObjectId, ref: 'Office' },
 	},
 	{ timestamps: true, collection: 'brokerProfiles' },
 );

@@ -1,0 +1,10 @@
+const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const [name, cli, ...args] = process.argv.slice(2);
+const output = fs.createWriteStream(path.join(__dirname, name + '.log'));
+let tail = '';
+const child = spawn(process.execPath, [path.resolve(cli), ...args], { cwd: process.cwd(), windowsHide: true });
+for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { output.write(data); tail = (tail + data.toString()).slice(-3500); });
+child.on('close', code => { output.end(); console.log(tail); process.exitCode = code ?? 1; });
+child.on('error', error => { output.end(); console.error(error.message); process.exitCode = 1; });

@@ -16,6 +16,9 @@ export class YachtInquiry {
 	@Field(() => ID)
 	yachtId: ObjectId;
 
+	@Field(() => ID, { nullable: true })
+	memberId?: ObjectId;
+
 	@Field()
 	name: string;
 
@@ -51,4 +54,8 @@ export class YachtInquiries {
 
 	@Field()
 	total: number;
+
+	@Field(() => Int, { nullable: true }) page?: number;
+	@Field(() => Int, { nullable: true }) limit?: number;
+	@Field(() => Int, { nullable: true }) totalPages?: number;
 }
