@@ -86,9 +86,10 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 		if (!result.allowed) throw new SocketFailure('RATE_LIMITED', result.retryAfterSeconds);
 	}
 	private async authenticate(socket: Client): Promise<void> {
+		const token: unknown = (socket.handshake.auth as { token?: unknown }).token;
+		delete socket.handshake.auth.token;
 		await this.quota('socket-connect', socket.handshake.address, 20);
 		if (!this.adapter.ready()) throw new SocketFailure('SOCKET_UNAVAILABLE', 5);
-		const token: unknown = (socket.handshake.auth as { token?: unknown }).token;
 		if (typeof token !== 'string' || token.length > 8192 || !token || /\s/.test(token))
 			throw new SocketFailure('SOCKET_UNAUTHENTICATED');
 		try {
@@ -99,8 +100,6 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 		} catch {
 			throw new SocketFailure('SOCKET_UNAUTHENTICATED');
 		}
-		// The framework/adapter never needs to retain credentials after verification.
-		delete socket.handshake.auth.token;
 	}
 	async handleConnection(socket: Client): Promise<void> {
 		socket.on('error', () => undefined);
@@ -150,8 +149,18 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 		if (!this.adapter.ready()) throw new SocketFailure('SOCKET_UNAVAILABLE');
 		try {
 			await this.auth.getMe(member.memberId);
+			await this.revalidateRooms(socket);
 		} catch {
 			throw new SocketFailure('SOCKET_UNAUTHENTICATED');
+		}
+	}
+	private async revalidateRooms(socket: Client): Promise<void> {
+		for (const room of socket.rooms) {
+			if (!room.startsWith('conversation:')) continue;
+			const memberId = this.context(socket).memberId;
+			if (await this.policy.canAccess(memberId, room.slice(13))) continue;
+			await this.state.typing(memberId, room.slice(13), socket.id, false);
+			await socket.leave(room);
 		}
 	}
 	private async refresh(socket: Client): Promise<void> {
@@ -159,6 +168,7 @@ export class SocketGateway implements OnGatewayInit, OnGatewayConnection, OnGate
 			const member = this.context(socket);
 			if (!this.adapter.ready()) throw new Error();
 			await this.auth.getMe(member.memberId);
+			await this.revalidateRooms(socket);
 			if ((await this.state.presence(member.memberId, socket.id, 'touch')) === undefined) throw new Error();
 			if (!socket.connected) await this.state.presence(member.memberId, socket.id, 'remove');
 		} catch {

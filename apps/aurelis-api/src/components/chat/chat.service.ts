@@ -60,15 +60,13 @@ export class ChatService {
 		const member = await this.activeMember(memberId);
 		const conversation = await this.conversations.findById(chatId(conversationId)).lean().exec();
 		// Missing and unrelated IDs share the same error to avoid existence disclosure.
-		if (
-			!conversation ||
-			(!this.participant(conversation, memberId) && !(allowAdmin && member.role === MemberRole.ADMIN))
-		)
+		if (!conversation || (member.role === MemberRole.ADMIN ? !allowAdmin : !this.participant(conversation, memberId)))
 			throw chatError('CHAT_FORBIDDEN', 'Conversation access denied.');
 		return conversation;
 	}
 	async start(memberId: string, yachtId: string): Promise<Conversation> {
-		await this.activeMember(memberId);
+		const member = await this.activeMember(memberId);
+		if (member.role === MemberRole.ADMIN) throw chatError('CHAT_FORBIDDEN', 'Conversation access denied.');
 		const yacht = await this.yachts
 			.findOne({ _id: chatId(yachtId), ...buildPublicYachtVisibilityFilter() })
 			.lean()
@@ -77,7 +75,14 @@ export class ChatService {
 		const broker = yacht.brokerId
 			? await this.brokers.findOne({ _id: yacht.brokerId, isActive: true }).lean().exec()
 			: null;
-		if (!broker?.memberId || !(await this.members.exists({ _id: broker.memberId, status: MemberStatus.ACTIVE })))
+		if (
+			!broker?.memberId ||
+			!(await this.members.exists({
+				_id: broker.memberId,
+				status: MemberStatus.ACTIVE,
+				role: { $ne: MemberRole.ADMIN },
+			}))
+		)
 			throw chatError('CHAT_BROKER_UNAVAILABLE', 'This yacht has no usable assigned broker account.');
 		if (String(broker.memberId) === memberId.toLowerCase())
 			throw chatError('CHAT_SELF_CONVERSATION', 'You cannot start a conversation with yourself.');
@@ -99,7 +104,7 @@ export class ChatService {
 				)
 				.lean()
 				.exec();
-		} catch (error) {
+		} catch (error: unknown) {
 			if (!(error && typeof error === 'object' && 'code' in error && error.code === 11000)) throw error;
 			conversation = await this.conversations.findOne(relationship).lean().exec();
 		}

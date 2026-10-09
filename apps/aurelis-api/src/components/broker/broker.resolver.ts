@@ -1,7 +1,7 @@
 import { Args, ID, Query, Resolver, Mutation } from '@nestjs/graphql';
 import { UseGuards } from '@nestjs/common';
 import { BrokerProfile, BrokerProfiles } from '../../libs/dto/broker/broker';
-import { BrokerProfileInput } from '../../libs/dto/broker/broker.input';
+import { BrokerCatalogInput, BrokerProfileInput } from '../../libs/dto/broker/broker.input';
 import { MemberRole } from '../../libs/enums/member.enum';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { AuthGuard } from '../auth/guards/auth.guard';
@@ -13,9 +13,8 @@ export class BrokerResolver {
 	constructor(private readonly brokerService: BrokerService) {}
 
 	@Query(() => BrokerProfiles)
-	async getBrokerProfiles(): Promise<BrokerProfiles> {
-		const list = await this.brokerService.listActive();
-		return { list, total: list.length };
+	getBrokerProfiles(@Args('input', { nullable: true }) input?: BrokerCatalogInput): Promise<BrokerProfiles> {
+		return this.brokerService.catalog(input ?? new BrokerCatalogInput());
 	}
 
 	@Query(() => BrokerProfile)

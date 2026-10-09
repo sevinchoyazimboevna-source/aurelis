@@ -3,7 +3,7 @@ import { conversationRoom, memberRoom } from './socket.constants';
 import { ChatService } from '../components/chat/chat.service';
 import { RoomPolicy } from './room-policy';
 import { RedisService } from '../redis/redis.service';
-import { SocketAdapterService, safeSubscriber } from './socket-adapter.service';
+import { SocketAdapterService, safeSubscriber, safePublisher } from './socket-adapter.service';
 import { Server } from 'socket.io';
 import Redis from 'ioredis';
 import { createAdapter } from '@socket.io/redis-adapter';
@@ -81,6 +81,19 @@ describe('Socket foundation', () => {
 		expect(() => adapter.install({ adapter: jest.fn() } as unknown as Server)).not.toThrow();
 		expect(adapter.ready()).toBe(false);
 		expect(disconnect).toHaveBeenCalled();
+	});
+	it('contains upstream publish/subscription rejections and marks adapter unavailable', async () => {
+		const failed = jest.fn();
+		const client = {
+			publish: jest.fn().mockRejectedValue(new Error('redis secret')),
+			subscribe: jest.fn().mockRejectedValue(new Error('offline')),
+			psubscribe: jest.fn().mockRejectedValue(new Error('offline')),
+		};
+		await expect(safePublisher(client as unknown as Redis, failed).publish('private', 'message')).resolves.toBe(0);
+		const sub = safeSubscriber(client as unknown as Redis, failed);
+		await expect(sub.subscribe('channel')).resolves.toBe(0);
+		await expect(sub.psubscribe('channel*')).resolves.toBe(0);
+		expect(failed).toHaveBeenCalledTimes(3);
 	});
 	it('contains upstream fire-and-forget unsubscribe failures during offline shutdown', async () => {
 		const client = {

@@ -12,6 +12,10 @@ export class ChatEventsService {
 	emit(conversationId: string, event: string, payload: unknown): void {
 		// Persistence succeeds even if realtime delivery is degraded; history is recoverable.
 		if (!this.server || !this.ready?.()) return;
-		this.server.to(conversationRoom(conversationId)).emit(event, payload);
+		try {
+			this.server.to(conversationRoom(conversationId)).emit(event, payload);
+		} catch {
+			// MongoDB history remains available after a synchronous adapter failure.
+		}
 	}
 }

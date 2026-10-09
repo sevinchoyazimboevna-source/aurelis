@@ -121,6 +121,22 @@ describe('RedisService (offline client)', () => {
 		await service.invalidatePopularity();
 		expect(client.set).toHaveBeenCalledWith('aurelis:cache:popularity:generation', expect.any(String), 'EX', 86400);
 	});
+	it('isolates every popularity request dimension', async () => {
+		const base = {
+			input: { page: 1, limit: 20, sortBy: 'POPULAR', filter: { listingMode: 'SALE', country: 'Italy' } },
+			featuredOnly: false,
+		};
+		const initial = await service.popularityKey(base);
+		for (const variant of [
+			{ ...base, input: { ...base.input, page: 2 } },
+			{ ...base, input: { ...base.input, limit: 10 } },
+			{ ...base, input: { ...base.input, sortBy: 'MOST_LIKED' } },
+			{ ...base, input: { ...base.input, filter: { ...base.input.filter, listingMode: 'CHARTER' } } },
+			{ ...base, input: { ...base.input, filter: { ...base.input.filter, country: 'France' } } },
+			{ ...base, featuredOnly: true },
+		])
+			expect(await service.popularityKey(variant)).not.toBe(initial);
+	});
 	it('namespaces temporary state and makes presence specific to each session', async () => {
 		await service.setTemporary('token', 'private-id', { value: 1 }, 90);
 		expect(client.set).toHaveBeenCalledWith(expect.stringMatching(/^aurelis:temporary:/), '{"value":1}', 'EX', 90);

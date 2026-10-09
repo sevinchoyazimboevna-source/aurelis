@@ -2,8 +2,8 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { isValidObjectId, Model } from 'mongoose';
 import { BadRequestException } from '@nestjs/common';
-import { BrokerProfile } from '../../libs/dto/broker/broker';
-import { BrokerProfileInput } from '../../libs/dto/broker/broker.input';
+import { BrokerProfile, BrokerProfiles } from '../../libs/dto/broker/broker';
+import { BrokerCatalogInput, BrokerProfileInput } from '../../libs/dto/broker/broker.input';
 import { MemberRecord } from '../../libs/schemas/Member.model';
 import { OfficeService } from '../office/office.service';
 
@@ -15,8 +15,30 @@ export class BrokerService {
 		@InjectModel('Member') private readonly memberModel: Model<MemberRecord>,
 	) {}
 
-	async listActive(): Promise<BrokerProfile[]> {
-		return this.brokerModel.find({ isActive: true }).sort({ name: 1 }).lean().exec();
+	async catalog(input: BrokerCatalogInput = new BrokerCatalogInput()): Promise<BrokerProfiles> {
+		const { page = 1, limit = 20 } = input;
+		if (
+			!Number.isSafeInteger(page) ||
+			page < 1 ||
+			!Number.isInteger(limit) ||
+			limit < 1 ||
+			limit > 50 ||
+			!Number.isSafeInteger((page - 1) * limit)
+		) {
+			throw new BadRequestException('Invalid broker pagination');
+		}
+		const filter = { isActive: true };
+		const [list, total] = await Promise.all([
+			this.brokerModel
+				.find(filter)
+				.sort({ name: 1, _id: 1 })
+				.skip((page - 1) * limit)
+				.limit(limit)
+				.lean()
+				.exec(),
+			this.brokerModel.countDocuments(filter).exec(),
+		]);
+		return { list, total, page, limit, totalPages: Math.ceil(total / limit) };
 	}
 
 	async getById(id: string): Promise<BrokerProfile> {

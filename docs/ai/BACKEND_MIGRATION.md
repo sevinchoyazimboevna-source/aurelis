@@ -1,5 +1,25 @@
 # Backend Migration
 
+## Current status — STEP 17 (2026-10-09)
+
+Final cleanup and actual isolated local MongoDB/Redis/API/GraphQL/Socket.IO/private chat verification are recorded in [STEP_17_REPORT.md](STEP_17_REPORT.md), with the complete [API inventory](STEP_17_API_INVENTORY.md) and pre-deletion [candidate decisions](STEP_17_CLEANUP_CANDIDATES.md). Safe deletions/dependency removal preserve all prior STEP 16 work and all tests. GraphQL variable errors no longer reflect credential/contact inputs; getBrokerProfiles now has optional pagination (1/20 defaults, maximum 50) while retaining list/Float total and argument-free calls.
+
+Verified: both no-emit app compiler checks; 47 unit suites/1,162 tests; 14 API HTTP suites/556 tests; batch 1/1. Real local two-instance private messages/read/unread, historical broker authorization, live indexes/unique constraints/counters, cache/TTL/quotas/presence/typing and Redis outage fail-closed behavior pass. Twelve material/new TS files and the standalone verification utility lint clean; two minimally adjusted old fixtures retain 169 errors/8 warnings, and repository lint retains 1,046 errors/56 warnings/zero fatal errors.
+
+Next: FRONTEND INTEGRATION in the separate repository. Live successful Google login and production indexes/config/data/performance/multihost rollout remain UNVERIFIED. No builds, product feature expansion, frontend, Management Request, production database operation or migration/reconciliation invocation occurred. Earlier no-live-operation statements describe their historical steps.
+
+
+## Historical status — STEP 16 (2026-10-08)
+
+Verified on 2026-10-08: API/batch TypeScript no-emit checks; 46 unit suites / 1,147 tests; 13 API e2e suites / 544 tests; batch 1/1; all 14 changed TypeScript files and standalone utility focused lint clean. Repository lint: 1,150 errors / 61 warnings / zero fatal errors outside focused files. Local read-only Redis PING and isolated two-server pub/sub delivery passed; live Mongo and production Redis recovery/TTL/concurrency/deployment remain UNVERIFIED. Sanitized bootstrap logging suppresses framework exception details. Full evidence: [STEP_16_REPORT.md](STEP_16_REPORT.md).
+
+The backend feature roadmap is complete. The next task is **FRONTEND INTEGRATION** in the separately located frontend repository, not another backend feature step. See [STEP_16_REPORT.md](STEP_16_REPORT.md) for the final audit, validation, contracts and categorized deployment assumptions. Older roadmap entries below are historical and do not reopen completed steps.
+
+MongoDB owns permanent application data; GraphQL owns persistent APIs; Socket.IO owns authenticated private realtime delivery; Redis owns bounded caches, rate limits, presence/typing TTL state and adapter pub/sub. No frontend, Management Request, builds, migrations or live MongoDB operations were performed.
+
+Private chat persists customer/yacht/broker-profile relationships and immutable brokerMemberId. Profile relinking never transfers history. ADMIN has explicit read-only history access even when recorded as a participant; new ADMIN customer starts and newly linked ADMIN broker participation are rejected. Both transports share ChatService and the per-member 30/60s message quota. See the report for same-profile relinking/reuse semantics and production index requirements.
+
+
 ## Step 10 sales / purchase inquiry workflow (2026-10-06)
 
 Added submitSalesInquiry(CreateSalesInquiryInput!) as a contact-only facade returning the existing YachtInquiry. InquiryService.createSales validates/normalizes the input and delegates to the canonical create path with SALES; that path forces NEW, verifies PUBLISHED through YachtService and checks listing mode SALE. Guests and verified optional Member links use the existing OptionalInquiryAuthGuard. Generic submission, charter behavior and ADMIN list/detail/status/filter/page contracts remain compatible.

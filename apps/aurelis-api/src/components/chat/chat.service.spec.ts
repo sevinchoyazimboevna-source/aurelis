@@ -1,6 +1,6 @@
 import { chatFixture, id } from './chat-test-fixture';
 import { chatPage } from './chat.service';
-import { MemberStatus } from '../../libs/enums/member.enum';
+import { MemberRole, MemberStatus } from '../../libs/enums/member.enum';
 import { Types, model } from 'mongoose';
 import ConversationSchema from '../../libs/schemas/Conversation.model';
 import MessageSchema from '../../libs/schemas/Message.model';
@@ -26,7 +26,7 @@ describe('Yacht private chat (offline MongoDB)', () => {
 		await expect(f.chat.start(id(1), id(10))).rejects.toMatchObject({ extensions: { code: 'CHAT_YACHT_NOT_FOUND' } });
 		expect(f.conversations).toHaveLength(0);
 	});
-	it.each(['unassigned', 'missing', 'inactive', 'unlinked', 'missing-member', 'blocked-member'])(
+	it.each(['unassigned', 'missing', 'inactive', 'unlinked', 'missing-member', 'blocked-member', 'admin-member'])(
 		'rejects unusable broker %s',
 		async (state) => {
 			if (state === 'unassigned') delete f.yachts[0].brokerId;
@@ -35,6 +35,7 @@ describe('Yacht private chat (offline MongoDB)', () => {
 			if (state === 'unlinked') delete f.brokers[0].memberId;
 			if (state === 'missing-member') f.members.splice(1, 1);
 			if (state === 'blocked-member') f.members[1].status = MemberStatus.BLOCKED;
+			if (state === 'admin-member') f.members[1].role = MemberRole.ADMIN;
 			await expect(f.chat.start(id(1), id(10))).rejects.toMatchObject({
 				extensions: { code: 'CHAT_BROKER_UNAVAILABLE' },
 			});
@@ -104,7 +105,7 @@ describe('Yacht private chat (offline MongoDB)', () => {
 		expect(f.messages).toHaveLength(1);
 		expect(message).not.toHaveProperty('__v');
 		expect(f.conversationModel.updateOne).toHaveBeenCalledWith(
-			{ _id: expect.any(Types.ObjectId) },
+			{ _id: expect.any(Types.ObjectId) as unknown },
 			{ $max: { lastMessageAt: message.createdAt } },
 		);
 		expect(f.emit).toHaveBeenCalledWith(cid, E.MESSAGE_NEW, message);
@@ -173,6 +174,34 @@ describe('Yacht private chat (offline MongoDB)', () => {
 		{ page: 1, limit: null },
 	])('validates pagination', (input) => {
 		expect(() => chatPage(input as { page: number; limit: number })).toThrow();
+	});
+	it('keeps ADMIN read-only even after participant promotion', async () => {
+		const cid = await start();
+		f.members[0].role = MemberRole.ADMIN;
+		expect(await f.chat.history(id(1), cid)).toMatchObject({ total: 0 });
+		for (const action of [
+			() => f.chat.start(id(1), id(10)),
+			() => f.chat.send(id(1), cid, 'Hello'),
+			() => f.chat.read(id(1), cid),
+			() => f.chat.unread(id(1), cid),
+		])
+			await expect(action()).rejects.toMatchObject({ extensions: { code: 'CHAT_FORBIDDEN' } });
+		expect(f.messages).toHaveLength(0);
+	});
+	it('relinking the same profile reuses its immutable historical identity', async () => {
+		const cid = await start();
+		f.brokers[0].memberId = new Types.ObjectId(id(3));
+		const existing = await f.chat.start(id(1), id(10));
+		expect(String(existing._id)).toBe(cid);
+		expect(String(existing.brokerMemberId)).toBe(id(2));
+		await expect(f.chat.access(id(3), cid)).rejects.toThrow();
+	});
+	it('late messages never move activity backwards', async () => {
+		const cid = await start();
+		const future = new Date('2099-01-01');
+		f.conversations[0].lastMessageAt = future;
+		await f.chat.send(id(1), cid, 'Late arrival');
+		expect(f.conversations[0].lastMessageAt).toBe(future);
 	});
 	it('declares explicit collections, unique relationship, history/unread indexes and validates schemas offline', async () => {
 		expect(ConversationSchema.get('collection')).toBe('conversations');

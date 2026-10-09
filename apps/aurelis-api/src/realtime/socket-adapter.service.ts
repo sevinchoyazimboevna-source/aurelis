@@ -18,7 +18,11 @@ export class SocketAdapterService implements OnModuleDestroy {
 				if (this.stopped || this.installed || this.pub?.status !== 'ready' || this.sub?.status !== 'ready') return;
 				try {
 					server.adapter(
-						createAdapter(this.pub, safeSubscriber(this.sub), { key: 'aurelis:socket.io', requestsTimeout: 1000 }),
+						createAdapter(
+							safePublisher(this.pub, () => this.onModuleDestroy()),
+							safeSubscriber(this.sub, () => this.onModuleDestroy()),
+							{ key: 'aurelis:socket.io', requestsTimeout: 1000 },
+						),
 					);
 					server.sockets.adapter.on('error', () => undefined);
 					this.installed = true;
@@ -47,18 +51,37 @@ export class SocketAdapterService implements OnModuleDestroy {
 	}
 }
 
-// The upstream adapter fires unawaited unsubscribe promises from close().
-// Contain those teardown-only failures, including when Redis is already offline.
-export function safeSubscriber(client: Redis): Redis {
+// The upstream adapter fires subscription and teardown promises without awaiting them.
+// Contain rejection and fail closed on a lost subscription; teardown remains harmless.
+export function safeSubscriber(client: Redis, onFailure: () => void = () => undefined): Redis {
 	return new Proxy(client, {
 		get(target, property, receiver): unknown {
-			if (property === 'unsubscribe' || property === 'punsubscribe') {
-				return async (...channels: string[]): Promise<unknown> => {
+			if (['subscribe', 'psubscribe', 'unsubscribe', 'punsubscribe'].includes(String(property))) {
+				return async (...channels: (string | string[])[]): Promise<unknown> => {
 					try {
-						return property === 'unsubscribe'
-							? await target.unsubscribe(...channels)
-							: await target.punsubscribe(...channels);
+						const command = Reflect.get(target, property) as (...args: (string | string[])[]) => Promise<unknown>;
+						return await command.apply(target, channels);
 					} catch {
+						if (property === 'subscribe' || property === 'psubscribe') onFailure();
+						return 0;
+					}
+				};
+			}
+			return Reflect.get(target, property, receiver) as unknown;
+		},
+	});
+}
+
+// Upstream broadcasts also fire publish promises without awaiting them.
+export function safePublisher(client: Redis, onFailure: () => void): Redis {
+	return new Proxy(client, {
+		get(target, property, receiver): unknown {
+			if (property === 'publish') {
+				return async (channel: string, message: string | Buffer): Promise<number> => {
+					try {
+						return await target.publish(channel, message);
+					} catch {
+						onFailure();
 						return 0;
 					}
 				};

@@ -1,5 +1,7 @@
 # Aurelis Backend
 
+Backend startup repair and frontend readiness verification (2026-10-10) are recorded in the [readiness report](docs/ai/FRONTEND_READINESS_REPORT.md). The next task is **frontend integration**. The [complete API inventory](docs/ai/STEP_17_API_INVENTORY.md) documents the preserved contracts; successful external Google sign-in and production deployment remain unverified.
+
 NestJS GraphQL backend for a global yacht sales and charter catalog. This repository does not contain the customer facing website.
 
 ## Services
@@ -16,6 +18,12 @@ The API uses MongoDB through Mongoose and generates its GraphQL schema at runtim
 3. Run the API with `npm run start:dev` or the batch health app with `npm run start:dev:batch`.
 
 The API listens on `AURELIS_API_PORT` (default `3000`); the batch health app listens on `AURELIS_BATCH_PORT` (default `3001`). Legacy `PORT_API` and `PORT_BATCH` remain supported as fallbacks. The GraphQL endpoint remains `/graphql`.
+
+Startup validates the required `MONGODB_URI` and `JWT_SECRET`, MongoDB/Redis URI formats and port bounds. `MONGO_DEV`, `MONGO_PROD` and `SECRET_TOKEN` are obsolete configuration names: explicitly copy the intended URI to `MONGODB_URI` and the existing signing secret to `JWT_SECRET`, preserving the database and credentials. Do not rename an external database as part of repository cleanup. `GOOGLE_CLIENT_ID` is required when using `googleLogin`; missing it does not prevent other features from starting.
+
+In development (or when `NODE_ENV` is unset), Nest error logs retain messages and stacks after credential/URI/token/contact redaction. Production keeps generic error logs. Errors still fail startup. Build both apps with `npm run build` and `npm run build:batch`; the corresponding production scripts start their compiled artifacts.
+
+No file upload endpoint, storage provider, multipart configuration or static `/uploads` route is wired. Image fields contain existing URL/path strings. Use already hosted image URLs for frontend integration; an upload workflow requires separate implementation.
 
 ## Member authentication and admin access
 
@@ -144,13 +152,11 @@ Guests can submit; supplied credentials must pass the existing optional authenti
 
 Yacht.salePrice remains the canonical listing price, with no client price requirement or inquiry snapshot. Budget/currency/offer fields are intentionally deferred; message captures buyer interest. No purchase, payment, escrow, KYC, CRM, notifications, frontend or Step 11+ workflows were added. No schema/index changes, migrations or database operations. See [the 55-point Step 10 report](docs/ai/STEP_10_REPORT.md) for validation and pending rollout checks.
 
-## Build and checks
+## Checks (no builds)
 
 ```bash
-npx tsc -p apps/aurelis-api/tsconfig.app.json --noEmit
-npx tsc -p apps/aurelis-batch/tsconfig.app.json --noEmit
-npm run build
-npx nest build aurelis-batch
+node --preserve-symlinks --preserve-symlinks-main node_modules/typescript/bin/tsc -p apps/aurelis-api/tsconfig.app.json --noEmit
+node --preserve-symlinks --preserve-symlinks-main node_modules/typescript/bin/tsc -p apps/aurelis-batch/tsconfig.app.json --noEmit
 npm run lint
 npm test -- --runInBand
 npm run test:e2e -- --runInBand
@@ -170,7 +176,7 @@ STEP 11 owner intake: public submitSellYachtRequest and ADMIN list/detail/status
 - WishlistItem remains the member/yacht source of truth. Upsert result metadata gates +1 on actual insert; deletion results gate -1 with likesCount>0. Unique-index losers and duplicate adds do not increment. Hidden/broken relation behavior and private ownership remain unchanged.
 - Cross-document writes are not transactional; failures and interleaved add/remove can drift and require separately scoped reconciliation. Overlapping toggles remain unserialized. Deployed unique-index/concurrency behavior is unverified.
 - MOST_VIEWED/MOST_LIKED descend by their counter then createdAt/_id; POPULAR descends by likesCount/viewsCount/createdAt/_id. Missing values normalize to zero for deterministic legacy ties. Existing featured default, wrappers and pricing aliases remain intact.
-- No new indexes or reconciliation script were added; representative plans, historical count repair and production rollout remain PENDING. See docs/ai/STEP_12_REPORT.md.
+- STEP 12 added no indexes or reconciliation script; STEP 16 adds the standalone dry-run utility below. Representative plans, actual historical repair and production rollout remain PENDING. See docs/ai/STEP_12_REPORT.md.
 
 ## STEP 13 Redis runtime
 
@@ -186,16 +192,50 @@ Limits apply per server-observed IP, shared across API instances: password/Googl
 
 `GET /health/redis` reports `ok/up` or `degraded/down`, plus the fail-closed policy, without URLs or credentials. HTTP 200 allows inspection of degradation independently of process liveness; monitor the JSON status. The existing root health greeting is preserved.
 
-RedisService provides JSON TTL/cache helpers, namespaced temporary get/set/delete helpers, and per-member/per-session presence touch/read/clear helpers (60-second default). Presence helpers are internal foundations: future STEP 14 must derive verified member/session identity, drive heartbeats and use dedicated pub/sub connections. No Socket.IO, chat, public presence endpoint or permanent state is implemented. See [STEP 13 report](docs/ai/STEP_13_REPORT.md).
+RedisService provides JSON TTL/cache helpers, namespaced temporary get/set/delete helpers, and per-member/per-session presence touch/read/clear helpers (60-second default). These helpers are internal foundations; SocketStateService now uses verified session identity and aggregate leases, while Socket.IO uses dedicated pub/sub connections. No public presence roster or permanent Redis business storage is implemented. See [STEP 13 report](docs/ai/STEP_13_REPORT.md).
 
 ## STEP 14 realtime infrastructure
 
-The API serves Socket.IO at the default /socket.io path using WebSocket transport only on the API port. Authenticate with handshake auth: { token: accessToken }; query-string tokens are ignored. Wait for socket:ready before sending events. Every reconnect reauthenticates and creates a new session; authorized conversation rooms must be joined again. There is no message persistence or recovery/replay.
+The API serves Socket.IO at the default /socket.io path using WebSocket transport only on the API port. Authenticate with handshake auth: { token: accessToken }; query-string tokens are ignored. Wait for socket:ready before sending events. Every reconnect reauthenticates and creates a new session; authorized conversation rooms must be joined again. Message history is persisted in MongoDB and recoverable through GraphQL; Socket.IO does not replay missed events.
 
 RealtimeModule reuses AuthService and global RedisService. Two dedicated ioredis clients use REDIS_URL for the Redis adapter; the shared command connection handles TTL presence, typing and rate limits. GET /health/socket returns readiness/degradation without secrets. Redis/adapter outages fail socket operations closed while HTTP health and existing API behavior remain available.
 
-Each socket renews a 60-second Redis presence lease every 20 seconds; multiple sockets keep a member online until the last live lease disappears. Typing leases expire after 5 seconds. Presence notifications stay in the verified member's private room; STEP 15 must define who can observe other members. room:join, room:leave, typing:start and typing:stop accept { conversationId }. Strict conversation:<24-hex-ObjectId> names and RoomPolicy deny all conversation access until STEP 15 supplies database membership authorization. No global public chat exists.
+Each socket renews a 60-second Redis presence lease every 20 seconds; multiple sockets keep a member online until the last live lease disappears. Typing leases expire after 5 seconds. Presence notifications stay in the verified member's private room; conversation:presence permits only an authorized historical participant to look up their counterpart. room:join, room:leave, typing:start and typing:stop accept { conversationId }. Strict conversation:<24-hex-ObjectId> room names and RoomPolicy enforce current Mongo-backed historical participant authorization. No global public chat exists.
 
 Connection attempts share 20/60 seconds per server IP; all incoming event packets share 120/60 seconds per verified member across sockets/instances. No forwarded-header trust or local limiter fallback. Outage errors use SOCKET_UNAVAILABLE or RATE_LIMIT_UNAVAILABLE; auth failures use SOCKET_UNAUTHENTICATED and limits use RATE_LIMITED with retryAfterSeconds. A server-disconnected client must explicitly reconnect with a valid token after service recovery.
 
 Run both TypeScript checks, unit/API/batch regressions, focused Socket/Redis lint and git diff --check for this step. Do not infer deployed multi-instance pub/sub or actual TTL behavior from offline tests. See docs/ai/STEP_14_REPORT.md for validation and rollout dependencies.
+
+## Final private chat and operations
+
+MongoDB stores Member, Yacht, BrokerProfile, CrewProfile, Destination, Office, Article, WishlistItem, YachtInquiry, SellYachtRequest, Conversation and Message, including permanent engagement counters. Redis stores caches, atomic quotas and temporary presence/typing state and transports Socket.IO pub/sub. GraphQL serves persistent application operations; Socket.IO delivers authenticated private events. Batch remains idle.
+
+Chat GraphQL operations: startYachtConversation, getMyConversations, getConversation, getConversationMessages, sendMessage and markConversationRead. Conversation.unreadCount is recipient-specific; ADMIN history returns null for this field. Lists/history default to 1/20, maximum 50. A customer starts from a PUBLISHED Yacht and its assigned active BrokerProfile with an active non-ADMIN memberId. This optional link is curated through ADMIN saveBrokerProfile and never changes Member roles.
+
+Conversation snapshots brokerMemberId at creation. Access does not follow future yacht broker reassignment or profile member relinking. The existing customerId/yachtId/brokerId unique key reuses historical conversations when the same profile is relinked; a different assigned profile creates a separate relationship. Existing authorized history remains available after yacht/profile hiding or deletion. ADMIN may inspect explicit GraphQL history and cannot start, send, join, type or mark participant messages read, including after promotion of a historical participant.
+
+Use WebSocket handshake auth.token; wait for socket:ready, then explicitly room:join with conversationId. Both GraphQL sendMessage and socket message:send use ChatService and the shared per-member Redis quota (30 messages/60s). text is trimmed and bounded to 1..4000. Sender identity is server-derived. message:new/message:read go only to conversation rooms. Reconnect reauthenticates/rejoins; recover missed history through GraphQL. typing:start/typing:stop require authorized joined rooms (5s leases). conversation:presence derives the other historical participant from an authorized conversation, with no public roster. Presence leases last 60s; each socket is removed independently. Account/room revocation is checked on events and every 20s, so it is not instantaneous across API instances.
+
+GET /health/redis and /health/socket return ok/degraded without secrets; both currently return HTTP 200, so monitoring must inspect the body. Root health is liveness, not dependency readiness. API bootstrap uses SanitizedLogger to suppress raw framework exception text/stacks while preserving fixed safe auth configuration diagnostics. MongoDB is required at API initialization but has no separate runtime Mongo readiness endpoint. Cache outages bypass to MongoDB; login/views/inquiries/sell/chat quotas fail closed with RATE_LIMIT_UNAVAILABLE (or RATE_LIMITED for exhaustion). Socket adapter command rejection stops pub/sub connections and requires API restart after Redis recovers; ordinary disconnected connections retain their bounded reconnect policy. Persisted messages survive missed realtime delivery.
+
+### Likes reconciliation (operator-only)
+
+scripts/reconcile-yacht-likes.js is never run by startup. Set MONGODB_URI explicitly in a separately authorized operator session; the utility does not load .env. With no flags it streams mismatches and orphan relation counts read-only. --help does not connect. Optional --apply --writes-paused repairs only likesCount, disables automatic collection/index creation, rechecks relation counts and matches the observed counter before writing; conflicts are skipped and exit code 2 reports them. Errors are sanitized; partial applies can be retried through a new dry-run.
+
+Before an authorized apply, drain API requests/in-flight cache fills and pause all wishlist writers/external writers throughout the comparison and repair. Wait at least 30s for existing popularity pages to expire before resuming. The flag is an operator acknowledgment, not a distributed lock. There is no cross-document transaction; MongoDB 4.4+ is required by the utility's $unionWith pipeline. It never deletes orphan/history records, upserts yachts or changes indexes. No dry-run database connection or apply was executed during STEP 16.
+
+### Final validation (no builds)
+
+Use node --preserve-symlinks --preserve-symlinks-main with node_modules/typescript/bin/tsc for both app -p checks and --noEmit; use node_modules/jest/bin/jest.js --runInBand for units and --config apps/aurelis-api/test/jest-e2e.json / apps/aurelis-batch/test/jest-e2e.json for the independent e2e suites. Lint is non-mutating; final focused and repository results and the working flat-config route are recorded in the report. Run git diff --check. Production Mongo/index deployment, TLS/ACLs/proxy/CORS setup, real Redis recovery/TTL/concurrency and release acceptance remain separate operational verification.
+
+## Local verification without a build
+
+With explicit safe local MongoDB/Redis/JWT configuration, run the TypeScript API directly:
+
+```powershell
+node --preserve-symlinks --preserve-symlinks-main -r ts-node/register/transpile-only apps/aurelis-api/src/main.ts
+```
+
+The opt-in `scripts/verify-local-backend.js --help` describes the complete local verification. Explicit `--run` requires loopback API/Mongo/Redis URLs, a fresh `aurelis_step17_*` database, a dedicated nonzero Redis database, and a local-only JWT secret. Two API URLs verify actual Redis-adapter private delivery across processes. The script retains synthetic records, never targets production or runs migrations/reconciliation, and does not flush Redis. See the Step 17 report for exact checks and environmental limits.
+
+`getBrokerProfiles` preserves its existing `list` and `total: Float!` wrapper and accepts optional `BrokerCatalogInput` with page 1/limit 20 defaults and maximum 50. `page`, `limit` and `totalPages` metadata are additive. Clients needing more than the first 20 brokers should page; no office/search filter was introduced.

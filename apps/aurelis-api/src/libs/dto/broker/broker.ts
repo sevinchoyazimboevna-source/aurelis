@@ -1,4 +1,4 @@
-import { Field, ID, ObjectType } from '@nestjs/graphql';
+import { Field, ID, Int, ObjectType } from '@nestjs/graphql';
 import type { ObjectId } from 'mongoose';
 
 @ObjectType()
@@ -47,4 +47,13 @@ export class BrokerProfiles {
 
 	@Field()
 	total: number;
+
+	@Field(() => Int, { nullable: true })
+	page?: number;
+
+	@Field(() => Int, { nullable: true })
+	limit?: number;
+
+	@Field(() => Int, { nullable: true })
+	totalPages?: number;
 }

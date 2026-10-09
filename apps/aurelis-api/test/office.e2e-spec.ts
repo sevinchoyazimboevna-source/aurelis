@@ -65,7 +65,17 @@ describe('Office and broker association GraphQL (e2e)', () => {
 		}),
 	};
 	const brokerModel = {
-		find: jest.fn((match) => ({ sort: () => lean(() => brokers.filter((row) => matches(row, match))) })),
+		find: jest.fn((match) => ({
+			sort: () => ({
+				skip: (offset: number) => ({
+					limit: (limit: number) =>
+						lean(() => brokers.filter((row) => matches(row, match)).slice(offset, offset + limit)),
+				}),
+			}),
+		})),
+		countDocuments: jest.fn((match) => ({
+			exec: () => Promise.resolve(brokers.filter((row) => matches(row, match)).length),
+		})),
 		findOne: jest.fn((match) => lean(() => brokers.find((row) => matches(row, match)) ?? null)),
 		findOneAndUpdate: jest.fn((match, update) => ({
 			exec: async () => {

@@ -11,6 +11,7 @@ import { ChatPageInput, SendMessageInput } from '../../libs/dto/chat/chat.input'
 import { Member } from '../auth/auth.dto';
 import { AuthGuard } from '../auth/guards/auth.guard';
 import { CurrentMember } from '../auth/decorators/current-member.decorator';
+import { MemberRole } from '../../libs/enums/member.enum';
 import { ChatService } from './chat.service';
 @UseGuards(AuthGuard)
 @Resolver(() => Conversation)
@@ -46,6 +47,7 @@ export class ChatResolver {
 	}
 	@ResolveField(() => Int, { nullable: true })
 	unreadCount(@Parent() conversation: Conversation, @CurrentMember() member: Member) {
+		if (member.role === MemberRole.ADMIN) return null;
 		if (![conversation.customerId, conversation.brokerMemberId].some((id) => String(id) === member._id)) return null;
 		return this.chat.unread(member._id, String(conversation._id));
 	}

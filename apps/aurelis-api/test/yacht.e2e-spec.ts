@@ -81,7 +81,7 @@ describe('Yacht GraphQL compatibility (mocked persistence, real resolver/service
 	};
 	const brokers = {
 		getById: jest.fn(async () => broker),
-		listActive: jest.fn(async () => [broker]),
+		catalog: jest.fn(() => Promise.resolve({ list: [broker], total: 1, page: 1, limit: 20, totalPages: 1 })),
 		upsert: jest.fn(async () => broker),
 	};
 	const post = (query: string, role?: string) => {

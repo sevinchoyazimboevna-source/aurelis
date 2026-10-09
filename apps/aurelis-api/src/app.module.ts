@@ -10,22 +10,23 @@ import { DatabaseModule } from './database/database.module';
 import { formatGraphQLError } from './components/auth/auth-errors';
 import { RealtimeModule } from './realtime/realtime.module';
 import { RedisModule } from './redis/redis.module';
+import { validateEnvironment } from './config/environment';
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    RedisModule,
+	imports: [
+		ConfigModule.forRoot({ isGlobal: true, validate: validateEnvironment }),
+		RedisModule,
 		RealtimeModule,
-    GraphQLModule.forRoot({
-      driver: ApolloDriver,
-      playground: process.env.NODE_ENV !== 'production',
-      autoSchemaFile: true,
-      formatError: formatGraphQLError,
-    }),
-    ComponentsModule,
-    DatabaseModule,
-  ],
-  controllers: [AppController],
-  providers: [AppService, AppResolver],
+		GraphQLModule.forRoot({
+			driver: ApolloDriver,
+			playground: process.env.NODE_ENV !== 'production',
+			autoSchemaFile: true,
+			formatError: formatGraphQLError,
+		}),
+		ComponentsModule,
+		DatabaseModule,
+	],
+	controllers: [AppController],
+	providers: [AppService, AppResolver],
 })
 export class AppModule {} //modul decorator

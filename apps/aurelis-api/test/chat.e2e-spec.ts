@@ -19,7 +19,20 @@ import { RoomPolicy } from '../src/realtime/room-policy';
 import { SocketStateService } from '../src/realtime/socket-state.service';
 import { SocketAdapterService } from '../src/realtime/socket-adapter.service';
 import { RedisService } from '../src/redis/redis.service';
+import { MemberRole } from '../src/libs/enums/member.enum';
 import { SOCKET_EVENTS as E, conversationRoom } from '../src/realtime/socket.constants';
+
+interface GraphQLBody {
+	errors?: { message: string; extensions: { code: string } }[];
+	data: {
+		startYachtConversation: Record<string, string | number>;
+		getMyConversations: { total: number };
+		getConversation: { unreadCount: number | null };
+		getConversationMessages: { total: number };
+		sendMessage: { text: string; senderId: string; readAt: null };
+		markConversationRead: { modifiedCount: number };
+	};
+}
 
 describe('Private yacht chat GraphQL and Socket.IO (offline persistence/Redis)', () => {
 	let app: INestApplication;
@@ -59,10 +72,11 @@ describe('Private yacht chat GraphQL and Socket.IO (offline persistence/Redis)',
 					error ? reject(error) : resolve(value),
 				);
 		});
-	const post = (query: string, n?: number) => {
+	const post = async (query: string, n?: number) => {
 		const req = request(app.getHttpServer()).post('/graphql');
 		if (n) req.set('Authorization', 'Bearer ' + token(n));
-		return req.send({ query });
+		const response = await req.send({ query });
+		return { body: response.body as GraphQLBody };
 	};
 	const start = async () => String((await f.chat.start(id(1), id(10)))._id);
 	beforeEach(async () => {
@@ -307,6 +321,61 @@ describe('Private yacht chat GraphQL and Socket.IO (offline persistence/Redis)',
 			expect(f.messages).toHaveLength(0);
 		},
 	);
+	it('shares one message quota across alternating transports', async () => {
+		const cid = await start();
+		const a = await client(1);
+		let accepted = 0;
+		f.redis.consumeRateLimit.mockImplementation(() =>
+			Promise.resolve({ allowed: ++accepted <= 2, retryAfterSeconds: 60 }),
+		);
+		expect(
+			(await post('mutation { sendMessage(input:{conversationId:"' + cid + '",text:"One"}) { _id } }', 1)).body.errors,
+		).toBeUndefined();
+		expect(await ack(a, E.MESSAGE_SEND, { conversationId: cid, text: 'Two' })).toMatchObject({ ok: true });
+		expect(
+			(await post('mutation { sendMessage(input:{conversationId:"' + cid + '",text:"Three"}) { _id } }', 1)).body
+				.errors[0].extensions.code,
+		).toBe('RATE_LIMITED');
+		expect(await ack(a, E.MESSAGE_SEND, { conversationId: cid, text: 'Four' })).toMatchObject({ code: 'RATE_LIMITED' });
+		expect(f.messages).toHaveLength(2);
+		expect(f.redis.consumeRateLimit).toHaveBeenCalledTimes(4);
+		for (const call of f.redis.consumeRateLimit.mock.calls) expect(call).toEqual(['chat-message', id(1), 30, 60]);
+	});
+	it('promoted ADMIN loses room and write access while retaining read-only history', async () => {
+		const cid = await start();
+		const a = await client(1);
+		await ack(a, E.JOIN, { conversationId: cid });
+		f.members[0].role = MemberRole.ADMIN;
+		await ack(a, E.HEARTBEAT, {});
+		expect(app.get(SocketGateway).server.sockets.sockets.get(a.id!)?.rooms.has(conversationRoom(cid))).toBe(false);
+		expect(await ack(a, E.JOIN, { conversationId: cid })).toMatchObject({ code: 'ROOM_FORBIDDEN' });
+		expect(await ack(a, E.MESSAGE_SEND, { conversationId: cid, text: 'Hello' })).toMatchObject({
+			code: 'ROOM_FORBIDDEN',
+		});
+		const response = await post(
+			'{ getConversation(conversationId:"' +
+				cid +
+				'") { unreadCount } getConversationMessages(conversationId:"' +
+				cid +
+				'") { total } }',
+			1,
+		);
+		expect(response.body.errors).toBeUndefined();
+		expect(response.body.data.getConversation.unreadCount).toBeNull();
+		expect(f.messages).toHaveLength(0);
+	});
+	it('keeps a saved message recoverable when synchronous delivery fails', async () => {
+		const cid = await start();
+		jest.spyOn(app.get(SocketGateway).server, 'to').mockImplementationOnce(() => {
+			throw new Error('adapter offline');
+		});
+		const response = await post(
+			'mutation { sendMessage(input:{conversationId:"' + cid + '",text:"Saved"}) { _id } }',
+			1,
+		);
+		expect(response.body.errors).toBeUndefined();
+		expect(await f.chat.history(id(2), cid)).toMatchObject({ total: 1 });
+	});
 	it('masks persistence errors without leaking stack/body/database details', async () => {
 		const cid = await start();
 		const a = await client(1);

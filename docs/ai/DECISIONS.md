@@ -1,5 +1,26 @@
 # Decisions
 
+## STEP 17 cleanup/verification decisions (2026-10-09)
+
+- User authorized actual safe local stack/persistence/index testing; no production target or destructive database work. Earlier step constraints are historical.
+- Preserve all prior changes/tests and protected standalone utilities; delete only reference-audited dead notes/catalog/imports/dependencies.
+- Sanitize GraphQL variable input reflection while keeping error codes.
+- Bound the existing Broker query with additive optional paging and nullable metadata; list/Float total and no-input syntax remain. No office/search filters or new query/domain.
+- Record actual local tests separately from external Google login/production rollout, which remain UNVERIFIED. Keep historical lint debt explicit; never suppress it to claim a green repository.
+- Frontend integration is next. See [Step 17 report](STEP_17_REPORT.md) and [API inventory](STEP_17_API_INVENTORY.md).
+
+## Final backend decisions — STEP 16 (2026-10-08)
+
+- Frontend integration is next. No new backend product scope or Management Request was introduced.
+- Preserve the implemented STEP 15 uniqueness key customerId/yachtId/brokerId. brokerMemberId is an immutable snapshot; restarting after the same profile is relinked reuses its historical conversation, without transferring access. A different assigned profile creates a separate relationship. No destructive identity/index redesign.
+- ADMIN history access is read-only regardless of historical participant status. Existing links may reference any Member role, but a newly selected ADMIN broker cannot provide participant chat and is unavailable for new starts. No account role is mutated.
+- Contain unawaited adapter publish/subscription failures and stop the affected adapter connections; this terminal fail-closed state requires API restart after Redis recovery. Ordinary reconnects without command rejection retain the existing lifecycle.
+- Keep existing AUTH_* codes, stateless logout and explicit signup duplicate-email disclosure. Login failures for unknown/wrong credentials remain identical. Strict non-enumeration for signup conflicts with that accepted code/message contract and is a recommended separately agreed policy change.
+- Reconciliation is standalone/dry-run by default; apply additionally requires --writes-paused, count rechecking and optimistic counter matching. It never deletes or changes indexes. No database invocation occurred.
+- Local Redis PING and an isolated two-server adapter delivery check passed; production recovery, TTL concurrency and Mongo/index deployment remain unverified.
+
+See [the final report](STEP_16_REPORT.md). Earlier decisions are historical where superseded here.
+
 ## Step 10 sales inquiry choices (2026-10-06)
 
 - Reuse YachtInquiry/yachtInquiries, the existing output and one shared service create path. Add a dedicated sales facade consistent with charter; keep InquiryType.SALES separate from YachtListingMode.SALE and force NEW. No material discrepancy or parallel persistence needed.

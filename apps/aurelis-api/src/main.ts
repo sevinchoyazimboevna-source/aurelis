@@ -1,14 +1,15 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { SanitizedLogger } from './libs/interceptor/sanitized-logger';
 import { LoggingInterceptor } from './libs/interceptor/Logging.interceptor';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule); 
-  app.enableShutdownHooks();
-  app.useGlobalPipes(new ValidationPipe({ validationError: { target: false, value: false } }));
-  app.useGlobalInterceptors(new LoggingInterceptor());
-  app.enableCors({ origin: true, credentials: true });
-  await app.listen(process.env.AURELIS_API_PORT ?? process.env.PORT_API ?? 3000);
+	const app = await NestFactory.create(AppModule, { logger: new SanitizedLogger() });
+	app.enableShutdownHooks();
+	app.useGlobalPipes(new ValidationPipe({ validationError: { target: false, value: false } }));
+	app.useGlobalInterceptors(new LoggingInterceptor());
+	app.enableCors({ origin: true, credentials: true });
+	await app.listen(process.env.AURELIS_API_PORT ?? process.env.PORT_API ?? 3000);
 }
-bootstrap();
+void bootstrap();

@@ -11,10 +11,13 @@ describe('Server socket heartbeat lifecycle', () => {
 	const memberId = '000000000000000000000001';
 	let gateway: SocketGateway;
 	const auth = { getMe: jest.fn() };
-	const state = { presence: jest.fn() };
+	const state = { presence: jest.fn(), typing: jest.fn() };
+	const policy = { canAccess: jest.fn() };
 	const adapter = { install: jest.fn(), ready: jest.fn() };
 	const socket = {
 		id: 'session',
+		rooms: new Set<string>(),
+		leave: jest.fn(),
 		connected: true,
 		data: { member: { memberId, expiresAt: 0 } },
 		emit: jest.fn(),
@@ -25,6 +28,12 @@ describe('Server socket heartbeat lifecycle', () => {
 		jest.clearAllMocks();
 		auth.getMe.mockResolvedValue({ _id: memberId });
 		state.presence.mockResolvedValue(true);
+		policy.canAccess.mockResolvedValue(true);
+		socket.rooms.clear();
+		socket.leave.mockImplementation((room: string) => {
+			socket.rooms.delete(room);
+			return Promise.resolve();
+		});
 		adapter.ready.mockReturnValue(true);
 		socket.connected = true;
 		socket.data.member.expiresAt = Date.now() + 60000;
@@ -33,7 +42,7 @@ describe('Server socket heartbeat lifecycle', () => {
 			{} as RedisService,
 			adapter as unknown as SocketAdapterService,
 			state as unknown as SocketStateService,
-			{} as RoomPolicy,
+			policy as unknown as RoomPolicy,
 			{} as ChatService,
 			{ attach: jest.fn() } as unknown as ChatEventsService,
 		);
@@ -60,6 +69,15 @@ describe('Server socket heartbeat lifecycle', () => {
 		await jest.advanceTimersByTimeAsync(20000);
 		expect(socket.disconnect).toHaveBeenCalledWith(true);
 		expect(socket.emit).toHaveBeenCalledWith('socket:error', { code: 'SOCKET_UNAVAILABLE' });
+	});
+	it('removes revoked conversation rooms during a quiet heartbeat', async () => {
+		const room = 'conversation:' + memberId;
+		socket.rooms.add(room);
+		policy.canAccess.mockResolvedValue(false);
+		await jest.advanceTimersByTimeAsync(20000);
+		expect(socket.leave).toHaveBeenCalledWith(room);
+		expect(state.typing).toHaveBeenCalledWith(memberId, memberId, 'session', false);
+		expect(socket.rooms.has(room)).toBe(false);
 	});
 	it('removes presence if a disconnect races with an in-flight heartbeat', async () => {
 		state.presence.mockImplementationOnce(() => {

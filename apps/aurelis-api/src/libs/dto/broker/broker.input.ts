@@ -1,5 +1,17 @@
-import { Field, ID, InputType } from '@nestjs/graphql';
-import { IsArray, IsBoolean, IsEmail, IsMongoId, IsOptional, IsString, MinLength, ValidateIf } from 'class-validator';
+import { Field, ID, InputType, Int } from '@nestjs/graphql';
+import {
+	IsArray,
+	IsBoolean,
+	IsEmail,
+	IsMongoId,
+	IsOptional,
+	IsString,
+	IsInt,
+	Min,
+	Max,
+	MinLength,
+	ValidateIf,
+} from 'class-validator';
 
 @InputType()
 export class BrokerProfileInput {
@@ -57,4 +69,20 @@ export class BrokerProfileInput {
 	@IsOptional()
 	@IsBoolean()
 	isActive?: boolean;
+}
+
+@InputType()
+export class BrokerCatalogInput {
+	@Field(() => Int, { nullable: true, defaultValue: 1 })
+	@ValidateIf((_object, value) => value !== undefined)
+	@IsInt()
+	@Min(1)
+	page = 1;
+
+	@Field(() => Int, { nullable: true, defaultValue: 20 })
+	@ValidateIf((_object, value) => value !== undefined)
+	@IsInt()
+	@Min(1)
+	@Max(50)
+	limit = 20;
 }
