@@ -1,98 +1,50 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Aurelis
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Aurelis is a NestJS monorepo containing a GraphQL API and a scheduled batch worker for a luxury-yacht platform.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Applications
 
-## Description
+- `aurelis-api` — GraphQL API, WebSocket support, authentication, and file uploads.
+- `aurelis-batch` — scheduled jobs that recalculate listing and broker rankings.
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+## AURELIS yacht contracts
 
-## Project setup
+The migration-ready yacht DTO and enum contracts live under `apps/aurelis-api/src/libs/dto/yacht` and `apps/aurelis-api/src/libs/enums/yacht.enum.ts`. They define the yacht fields (`yachtName`, specifications, capacity, price, location, media, lifecycle, and listing type), yacht search/pagination inputs, and these GraphQL enums:
 
-```bash
-$ npm install
-```
+- `YachtType`
+- `YachtStatus`
+- `YachtListingType` (`SALE`, `CHARTER`)
+- `YachtCurrency` (`EUR`, `USD`, `GBP`)
+- `YachtPricePeriod` (`DAY`, `WEEK`)
 
-## Compile and run the project
+`BROKER`, `YACHT`, and `JOURNAL` compatibility enum aliases were added for member roles and the existing like/view/comment/notification groups. `User`, `Broker`, and Journal TypeScript aliases are available alongside the existing DTOs.
 
-```bash
-# development
-$ npm run start
+### Current compatibility boundary
 
-# watch mode
-$ npm run start:dev
+The active API still has a property-prefixed resolver, service, and Mongo schema. Those layers directly query and persist `property*` keys, so renaming their live DTO fields to `yacht*` without a mapping/migration layer would make the API return undefined yacht fields and persist data that its queries do not read. Per the scope of this change, those files are unchanged; therefore the new yacht classes are abstract GraphQL contracts, ready to be wired during a dedicated resolver/service/schema migration.
 
-# production mode
-$ npm run start:prod
-```
+Pagination, filters, sorting, likes, views, favorites, and follows remain represented in the yacht contracts and retain the existing API conventions. The WebSocket chat gateway and all chat behavior are intentionally untouched.
 
-## Run tests
+## Setup
+
+1. Install dependencies: `npm install`
+2. Review `.env` and provide MongoDB connection strings and a strong `SECRET_TOKEN`.
+3. Run the API: `npm run start:dev`
+4. Run the batch worker separately: `npm run start:dev:batch`
+
+The API listens on `PORT_API` (default `3000`); the batch worker uses `PORT_BATCH` (default `3001`).
+
+## Commands
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+npm run build
+npm run lint
+npm run test
+npm run test:e2e
+npm run start:prod
+npm run start:prod:batch
 ```
 
-## Deployment
+## Environment
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Copy the supplied values in `.env.example` into `.env` when setting up another environment. Never commit real database URIs or signing secrets.
