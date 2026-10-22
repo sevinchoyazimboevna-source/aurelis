@@ -21,7 +21,7 @@ const MemberSchema = new Schema(
 		memberPhone: {
 			type: String,
 			index: { unique: true, sparse: true },
-			required: true,
+			required: false,
 		},
 		memberNick: {
 			type: String,
@@ -31,7 +31,7 @@ const MemberSchema = new Schema(
 		memberPassword: {
 			type: String,
 			select: false,
-			required: true,
+			required: false,
 		},
 		memberFullName: {
 			type: String,
@@ -95,4 +95,7 @@ const MemberSchema = new Schema(
 	},
 	{ timestamps: true, collection: 'members' },
 );
+
+MemberSchema.index({ memberType: 1, memberStatus: 1, createdAt: -1 });
+MemberSchema.index({ memberStatus: 1, createdAt: -1 });
 export default MemberSchema;

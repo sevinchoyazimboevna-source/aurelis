@@ -41,6 +41,7 @@ export class LoginInput {
 	@Field(() => String)
 	memberPassword!: string;
 }
+
 @InputType()
 class AISearch {
 	@IsNotEmpty()

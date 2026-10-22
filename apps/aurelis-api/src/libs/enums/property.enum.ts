@@ -1,6 +1,11 @@
 import { registerEnumType } from '@nestjs/graphql';
 
 export enum PropertyType {
+	MOTOR_YACHT = 'MOTOR_YACHT',
+	SAILING_YACHT = 'SAILING_YACHT',
+	CATAMARAN = 'CATAMARAN',
+	SUPERYACHT = 'SUPERYACHT',
+	// Retained so historic real-estate records remain valid.
 	APARTMENT = 'APARTMENT',
 	VILLA = 'VILLA',
 	HOUSE = 'HOUSE',

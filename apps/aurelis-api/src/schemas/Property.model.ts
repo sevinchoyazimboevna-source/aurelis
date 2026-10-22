@@ -112,5 +112,13 @@ const PropertySchema = new Schema(
 );
 
 PropertySchema.index({ propertyType: 1, propertyLocation: 1, propertyTitle: 1, propertyPrice: 1 }, { unique: true });
+// These match the public yacht-listing filters and default sort. They keep the
+// list query on an index instead of scanning and sorting the whole collection.
+PropertySchema.index({ propertyStatus: 1, createdAt: -1 });
+PropertySchema.index({ propertyStatus: 1, propertyRent: 1, createdAt: -1 });
+PropertySchema.index({ propertyStatus: 1, propertyLocation: 1, createdAt: -1 });
+PropertySchema.index({ propertyStatus: 1, propertyType: 1, createdAt: -1 });
+PropertySchema.index({ memberId: 1, propertyStatus: 1, createdAt: -1 });
+PropertySchema.index({ propertyStatus: 1, propertyPrice: 1 });
 
 export default PropertySchema;

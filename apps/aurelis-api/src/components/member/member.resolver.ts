@@ -27,11 +27,26 @@ import {
 } from '../../libs/config';
 import { WithoutGuard } from '../auth/guards/without.guard';
 import { GraphQLUpload, FileUpload } from 'graphql-upload';
-import { createWriteStream } from 'fs';
+import { createWriteStream, promises as fs } from 'fs';
+import { join, resolve, sep } from 'path';
 import { Message } from '../../libs/enums/common.enum';
 @Resolver()
 export class MemberResolver {
 	constructor(private readonly memberService: MemberService) {}
+
+	private async getUploadLocation(target: string, imageName: string): Promise<{ path: string; url: string }> {
+		if (!/^[a-zA-Z0-9_-]+$/.test(target)) throw new Error(Message.UPLOAD_FAILED);
+
+		const uploadsDirectory = resolve(process.cwd(), 'uploads');
+		const targetDirectory = resolve(uploadsDirectory, target);
+		if (!targetDirectory.startsWith(`${uploadsDirectory}${sep}`)) throw new Error(Message.UPLOAD_FAILED);
+
+		await fs.mkdir(targetDirectory, { recursive: true });
+		return {
+			path: join(targetDirectory, imageName),
+			url: `uploads/${target}/${imageName}`,
+		};
+	}
 
 	@Mutation(() => Member)
 	public async signup(@Args('input') input: MemberInput): Promise<Member> {
@@ -129,23 +144,22 @@ export class MemberResolver {
 	public async imageUploader(
 		@Args({ name: 'file', type: () => GraphQLUpload })
 		{ createReadStream, filename, mimetype }: FileUpload,
-		@Args('target') target: String,
+		@Args('target') target: string,
 	): Promise<string> {
 		console.log('Mutation: imageUploader');
 
 		if (!filename) throw new Error(Message.UPLOAD_FAILED);
-		console.log('jkbfjberbf', mimetype);
 		const validMime = validMimeTypes.includes(mimetype);
 		if (!validMime) throw new Error(Message.PROVIDE_ALLOWED_FORMAT);
 
 		const imageName = getSerialForImage(filename);
-		const url = `uploads/${target}/${imageName}`;
+		const { path, url } = await this.getUploadLocation(target, imageName);
 		const stream = createReadStream();
 
 		const result = await new Promise((resolve, reject) => {
 			stream.on('error', reject);
 			stream
-				.pipe(createWriteStream(url))
+				.pipe(createWriteStream(path))
 				.on('finish', () => resolve(true))
 				.on('error', reject);
 		});
@@ -159,26 +173,26 @@ export class MemberResolver {
 	public async imagesUploader(
 		@Args('files', { type: () => [GraphQLUpload] })
 		files: Promise<FileUpload>[],
-		@Args('target') target: String,
+		@Args('target') target: string,
 	): Promise<string[]> {
 		console.log('Mutation: imagesUploader');
 
 		const uploadedImages = [];
 		const promisedList = files.map(
-			async (img: Promise<FileUpload>, index: number): Promise<Promise<void>> => {
+			async (img: Promise<FileUpload>, index: number): Promise<void> => {
 				try {
-					const { filename, mimetype, encoding, createReadStream } = await img;
+					const { filename, mimetype, createReadStream } = await img;
 
 					const validMime = validMimeTypes.includes(mimetype);
 					if (!validMime) throw new Error(Message.PROVIDE_ALLOWED_FORMAT);
 
 					const imageName = getSerialForImage(filename);
-					const url = `uploads/${target}/${imageName}`;
+					const { path, url } = await this.getUploadLocation(target, imageName);
 					const stream = createReadStream();
 
 					const result = await new Promise((resolve, reject) => {
 						stream
-							.pipe(createWriteStream(url))
+							.pipe(createWriteStream(path))
 							.on('finish', () => resolve(true))
 							.on('error', () => reject(false));
 					});
@@ -187,7 +201,7 @@ export class MemberResolver {
 					// @ts-ignore
 					uploadedImages[index] = url;
 				} catch (err) {
-					console.log('Error, file missing!');
+					throw err;
 				}
 			},
 		);

@@ -197,8 +197,6 @@ export class MemberService {
 				$regex: new RegExp(text, 'i'),
 			};
 
-		console.log('match:', match);
-
 		const result = await this.memberModel
 			.aggregate([
 				{ $match: match },
@@ -212,15 +210,13 @@ export class MemberService {
 							{
 								$limit: input.limit,
 							},
-							lookUpAuthMemberLiked(memberId),
+							...(memberId ? [lookUpAuthMemberLiked(memberId)] : []),
 						],
 						metaCounter: [{ $count: 'total' }],
 					},
 				},
 			])
 			.exec();
-
-		console.log('result:', result);
 
 		if (!result.length) throw new InternalServerErrorException(Message.NO_DATA_FOUND);
 

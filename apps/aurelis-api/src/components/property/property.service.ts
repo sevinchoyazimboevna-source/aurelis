@@ -75,6 +75,11 @@ export class PropertyService {
 
 		if (!targetProperty) throw new InternalServerErrorException(Message.NO_DATA_FOUND);
 
+		const memberDataPromise = this.memberService.getMember(
+			null,
+			targetProperty.memberId as unknown as Types.ObjectId,
+		);
+
 		if (memberId) {
 			const viewInput = {
 				memberId: memberId,
@@ -82,31 +87,26 @@ export class PropertyService {
 				viewGroup: ViewGroup.PROPERTY,
 			};
 
-			const newView = await this.viewService.recordView(viewInput);
-
-			if (newView) {
-				await this.propertyStatsEditor({
-					_id: propertyId,
-					targetKey: 'propertyViews',
-					modifier: 1,
-				});
-
-				targetProperty.propertyViews++;
-			}
-
 			const likeInput = {
 				memberId: memberId,
 				likeRefId: propertyId,
 				likeGroup: LikeGroup.PROPERTY,
 			};
-			targetProperty.meLiked = await this.likeService.checkLikeExistence(likeInput);
-		}
+			const [newView, meLiked, memberData] = await Promise.all([
+				this.viewService.recordView(viewInput),
+				this.likeService.checkLikeExistence(likeInput),
+				memberDataPromise,
+			]);
+			targetProperty.meLiked = meLiked;
+			targetProperty.memberData = memberData;
 
-		targetProperty.memberData = await this.memberService.getMember(
-			// @ts-ignore
-			null,
-			targetProperty.memberId as unknown as Types.ObjectId,
-		);
+			if (newView) {
+				targetProperty.propertyViews++;
+				await this.propertyModel.updateOne({ _id: propertyId }, { $inc: { propertyViews: 1 } }).exec();
+			}
+		} else {
+			targetProperty.memberData = await memberDataPromise;
+		}
 
 		return targetProperty;
 	}
@@ -175,8 +175,6 @@ export class PropertyService {
 
 		this.shapeMatchQuery(match, input);
 
-		console.log('match:', match);
-
 		const result = await this.propertyModel
 			.aggregate([
 				{ $match: match },
@@ -186,7 +184,7 @@ export class PropertyService {
 						list: [
 							{ $skip: (input.page - 1) * input.limit },
 							{ $limit: input.limit },
-							lookUpAuthMemberLiked(memberId),
+							...(memberId ? [lookUpAuthMemberLiked(memberId)] : []),
 							lookupMember,
 							{
 								$unwind: '$memberData',
@@ -200,7 +198,6 @@ export class PropertyService {
 
 		if (!result.length) throw new InternalServerErrorException(Message.NO_DATA_FOUND);
 
-		console.log('dddd', result[0]);
 		return result[0];
 	}
 
@@ -266,8 +263,18 @@ export class PropertyService {
 		}
 
 		if (text) {
-			// Treat a visitor's keywords literally and search both live listing fields.
-			const expression = new RegExp(text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+			// Yacht types are stored as enum values (for example `MOTOR_YACHT`),
+			// while visitors naturally search with spaces or hyphens. Treat those
+			// separators as interchangeable without allowing regex input.
+			const expression = new RegExp(
+				text
+					.trim()
+					.split(/[\s_-]+/)
+					.filter(Boolean)
+					.map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+					.join('[\\s_-]*'),
+				'i',
+			);
 			match.$and = [
 				...(match.$and ?? []),
 				{ $or: [{ propertyTitle: { $regex: expression } }, { propertyType: { $regex: expression } }] },

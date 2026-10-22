@@ -16,25 +16,22 @@ export class ViewService {
 		private readonly viewModel: Model<View>,
 	) {}
 
-	public async recordView(input: ViewInput): Promise<View | null> {
-		const viewExist = await this.checkViewExistence(input);
+	public async recordView(input: ViewInput): Promise<boolean> {
+		// A single atomic upsert replaces a read-then-write pair and also avoids
+		// duplicate view records when requests arrive at the same time.
+		const result = await this.viewModel
+			.updateOne(
+				{
+					memberId: input.memberId,
+					viewRefId: input.viewRefId,
+					viewGroup: input.viewGroup,
+				},
+				{ $setOnInsert: input },
+				{ upsert: true },
+			)
+			.exec();
 
-		if (!viewExist) {
-			console.log('- New View Insert -');
-
-			return await this.viewModel.create(input);
-		} else return null;
-	}
-
-	private async checkViewExistence(input: ViewInput): Promise<View | null> {
-		const { memberId, viewRefId } = input;
-
-		const search: T = {
-			memberId: memberId,
-			viewRefId: viewRefId,
-		};
-
-		return await this.viewModel.findOne(search).exec();
+		return result.upsertedCount === 1;
 	}
 
 	public async getVisitedProperties(
